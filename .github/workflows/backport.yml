@@ -119,10 +119,11 @@ jobs:
       - name: Update version for develop (test-develop)
         id: version
         run: |
-          VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version *= *"(.)"/\1/')
+          VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' pyproject.toml)
           echo "current_version=$VERSION" >> $GITHUB_OUTPUT
-          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
           DATE=$(date +'%Y%m%d')
+          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
+          NEW_VERSION="${MAJOR_MINOR}.${{ steps.date.outputs.date }}"  # Ensure the version is updated properly.
           NEW_VERSION="${MAJOR_MINOR}.${DATE}-dev"
 
           # Sanitize branch name: Remove invalid characters like `=`, `"`, and spaces
