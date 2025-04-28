@@ -10,7 +10,6 @@ viswak
 def fetch_clinical_trials_subset(
     franchise_name: str,
 ) -> pd.DataFrame:
-    """Filjklter thejhkjhjlalojpoijp incioijocomin,mauauuannng dataframe for the query names. test3
 
     be fetched ahellos wetestll toapps make sure all the cases are covered. test1
 
