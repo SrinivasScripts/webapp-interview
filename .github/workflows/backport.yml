@@ -3,8 +3,8 @@ name: Backport Full Flow (test-main ➔ test-stable ➔ test-develop)
 on:
   pull_request:
     branches:
-      - main
-      - stable
+      - test-main
+      - test-stable
     types: [closed]
 
 env:
@@ -13,7 +13,7 @@ env:
 jobs:
   # STEP 1: Backport to test-stable when test-main PR is merged
   backport-to-test-stable:
-    if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'main' }}
+    if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-main' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout full history
@@ -26,6 +26,10 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Set remote URL to use BOT_ACCESS_TOKEN
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -33,11 +37,11 @@ jobs:
 
       - name: Create backport branch from test-main
         run: |
-          git checkout main
-          git pull origin main
+          git checkout test-main
+          git pull origin test-main
           git checkout -b backport-to-test-stable
 
-      - name: Merge base branch stable
+      - name: Merge latest stable
         run: |
           git fetch origin
           git merge origin/test-stable --no-ff --no-edit || true
@@ -55,17 +59,14 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Push backport branch
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}
-          git push origin backport-to-test-stable
+        run: git push origin backport-to-test-stable
 
       - name: Create PR to test-stable
-        id: create_stable_pr
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.BOT_ACCESS_TOKEN }}
           branch: backport-to-test-stable
-          base: stable
+          base: test-stable
           title: '[AUTO] Backport full changes test-main -> test-stable'
           commit-message: '[AUTO] Full backport from test-main to test-stable'
           body: |
@@ -73,7 +74,7 @@ jobs:
 
   # STEP 2: Backport to test-develop when test-stable PR is merged
   backport-to-test-develop:
-    if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'stable' }}
+    if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-stable' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout full history
@@ -86,6 +87,10 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Set remote URL to use BOT_ACCESS_TOKEN
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -93,11 +98,11 @@ jobs:
 
       - name: Create backport branch from test-stable
         run: |
-          git checkout stable
-          git pull origin stable
+          git checkout test-stable
+          git pull origin test-stable
           git checkout -b backport-to-test-develop
 
-      - name: Merge base branch test-develop
+      - name: Merge latest develop
         run: |
           git fetch origin
           git merge origin/test-develop --no-ff --no-edit || true
@@ -122,7 +127,7 @@ jobs:
         with:
           token: ${{ secrets.BOT_ACCESS_TOKEN }}
           branch: backport-to-test-develop
-          base: develop
+          base: test-develop
           title: '[AUTO] Backport full changes test-stable -> test-develop'
           commit-message: '[AUTO] Full backport from test-stable to test-develop'
           body: |
