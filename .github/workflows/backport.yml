@@ -11,7 +11,6 @@ env:
   PYTHON_VERSION: "3.11.11"
 
 jobs:
-  # STEP 1: Backport to test-stable when test-main PR is merged
   backport-to-test-stable:
     if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-main' }}
     runs-on: ubuntu-latest
@@ -21,14 +20,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set remote URL to use BOT_ACCESS_TOKEN
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git
+
       - name: Set Git user
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Set remote URL to use BOT_ACCESS_TOKEN
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -72,7 +71,6 @@ jobs:
           body: |
             This PR includes full changes from test-main to test-stable, including version bump.
 
-  # STEP 2: Backport to test-develop when test-stable PR is merged
   backport-to-test-develop:
     if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-stable' }}
     runs-on: ubuntu-latest
@@ -82,14 +80,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set remote URL to use BOT_ACCESS_TOKEN
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git
+
       - name: Set Git user
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Set remote URL to use BOT_ACCESS_TOKEN
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
