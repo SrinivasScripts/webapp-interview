@@ -55,7 +55,9 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Push backport branch
-        run: git push origin backport-to-test-stable
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}
+          git push origin backport-to-test-stable
 
       - name: Create PR to test-stable
         id: create_stable_pr
