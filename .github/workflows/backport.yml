@@ -57,7 +57,9 @@ jobs:
         run: |
           git add pyproject.toml
           git commit -m "Update version to ${{ steps.update-version-stable.outputs.new_version }}"
-          git push origin test-stable
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:test-stable
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create main-to-stable PR
         id: test-stable-pr
@@ -138,7 +140,9 @@ jobs:
         run: |
           git add pyproject.toml
           git commit -m "Update version to ${{ steps.version.outputs.new_version }} for develop"
-          git push origin test-develop
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:test-develop
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create stable-to-develop PR
         id: test-develop-pr
