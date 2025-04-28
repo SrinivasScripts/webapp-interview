@@ -42,17 +42,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Update version for stable
+      - name: Update version for stable (test-stable)
         id: update-version-stable
         run: |
           VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' pyproject.toml)
           echo "current_version=$VERSION" >> $GITHUB_OUTPUT
           MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
-          NEW_VERSION="${MAJOR_MINOR}.${{ steps.date.outputs.date }}"
+          NEW_VERSION="${MAJOR_MINOR}.${{ steps.date.outputs.date }}"  # Ensure the version is updated properly.
           sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           cat pyproject.toml
 
+      # No need to push the changes directly, just create a PR
       - name: Create main-to-stable PR
         id: test-stable-pr
         uses: peter-evans/create-pull-request@v3
@@ -113,7 +114,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Update version for develop
+      - name: Update version for develop (test-develop)
         id: version
         run: |
           VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version *= *"(.)"/\1/')
@@ -124,6 +125,7 @@ jobs:
           sed -i "s/version = \"${VERSION}\"/version = \"${NEW_VERSION}\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
+      # Create a backport PR from stable to develop, no need to push manually
       - name: Create stable-to-develop PR
         id: test-develop-pr
         uses: peter-evans/create-pull-request@v3
