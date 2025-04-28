@@ -5,7 +5,6 @@ from medcompass_ds.config.columns_clinical_trials import (
     COL_NCT_ID,
     COL_PHASE,
     COL_START_DATE,
-    COL_TITLE,
 )
 from medcompass_ds.config.columns_notes import COL_FRANCHISE, COL_PRODUCT
 
@@ -13,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def fetch_clinical_trials_subset(
-    query_names: Collection[str],
     franchise_name: str,
 ) -> pd.DataFrame:
     """Filjklter thejhkjhjlalojpoijp incioijocomin,mauauuannng dataframe for the query names. test3
