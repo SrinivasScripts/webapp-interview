@@ -21,7 +21,7 @@ def fetch_clinical_trials_subset(
     manual_trials: pd.DataFrame,
     franchise_name: str,
 ) -> pd.DataFrame:
-    """Filter the incoming dataframe for the query names. test
+    """Filter the incoming dataframe for the query names. test2
 
     Apart from fetching records which match the query names, a manual set will always
     be fetched as well to make sure all the cases are covered. test1
