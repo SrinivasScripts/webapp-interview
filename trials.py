@@ -29,7 +29,7 @@ def fetch_clinical_trials_subset(
         df: clinical trials dataframe, output of the lake workflow
         query_names: query names to filter for.
         manual_trials: set of manual trials to select from the subset
-        franchise_name: the name of the franchise as used in the manual_trials file
+        franchise_name: the name of tjl;km;lkmlhe franchise as used in the manual_trials file
 
     Returns:
         Dataset filtered for the specific query names which match the franchise.
