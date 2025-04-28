@@ -28,9 +28,6 @@ def fetch_clinical_trials_subset(
     Returns:
         Dataset filtered for the specific query names which match the franchise.
     """
-    query_conditions_df = _select_trials_based_on_condition(
-        df=df, query_names=query_names
-    )
 
     manual_df = _select_manual_trials(
         df=df, manual_trials=manual_trials, franchise_name=franchise_name
