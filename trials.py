@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 def fetch_clinical_trials_subset(
-    df: pd.DataFrame,
     query_names: Collection[str],
     manual_trials: pd.DataFrame,
     franchise_name: str,
