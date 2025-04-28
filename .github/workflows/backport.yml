@@ -137,7 +137,7 @@ jobs:
       - name: Commit and push updated version to pyproject.toml
         run: |
           git add pyproject.toml
-          git commit -m "Auto-update version to version = \"${{ steps.version.outputs.new_version }}\""
+          git commit -m "Auto-update version to version"
           git push origin test-develo
       - name: Create stable-to-develop PR
         id: test-develop-pr
