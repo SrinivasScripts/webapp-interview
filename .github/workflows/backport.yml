@@ -32,7 +32,7 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-
+      
       - name: Merge changes from test-main into test-stable with unrelated histories
         run: |
           git merge origin/test-main --no-edit --allow-unrelated-histories --strategy-option=theirs
@@ -67,7 +67,7 @@ jobs:
             Update version in pyproject.toml to ${{ steps.update-version-stable.outputs.version }}.
             This PR is automatically generated.
 
-      - name: Check created test-stable PR number
+      - name: Output the created pull request number
         run: |
           echo "Pull Request Number - ${{ steps.test-stable-pr.outputs.pull-request-number }}"
           echo "Pull Request URL - ${{ steps.test-stable-pr.outputs.pull-request-url }}"
@@ -77,13 +77,19 @@ jobs:
         with:
           github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
           script: |
+            const pull_number = parseInt('${{ steps.test-stable-pr.outputs.pull-request-number }}');
+            if (!pull_number) {
+              core.setFailed('PR number not found');
+            }
             await github.rest.pulls.merge({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: parseInt('${{ steps.test-stable-pr.outputs.pull-request-number }}'),
+              pull_number: pull_number,
               merge_method: 'merge',
             });
+
   backport-dev-pr:
+    needs: backport-stable-pr  # Make this job depend on the success of backport-stable-pr
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the base branch (test-stable)
@@ -142,9 +148,13 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const pull_number = parseInt('${{ steps.test-develop-pr.outputs.pull-request-number }}');
+            if (!pull_number) {
+              core.setFailed('PR number not found');
+            }
             await github.rest.pulls.merge({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: parseInt('${{ steps.test-develop-pr.outputs.pull-request-number }}'),
+              pull_number: pull_number,
               merge_method: 'merge',
             });
