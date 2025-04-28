@@ -134,14 +134,7 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "sanitized_branch_name=$SANITIZED_BRANCH_NAME" >> $GITHUB_OUTPUT
           cat pyproject.toml
-      - name: Commit and push updated version to pyproject.toml
-        run: |
-          git status
-          git add pyproject.toml
-          git commit -m "Auto-update version to version"
-          git push origin test-develop
-          git reset --hard HEAD
-          git clean -fd
+     
       - name: Create stable-to-develop PR
         id: test-develop-pr
         uses: peter-evans/create-pull-request@v3
