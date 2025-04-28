@@ -22,16 +22,14 @@ jobs:
         with:
           ref: test-main
 
+      - name: Fetch all branches from origin
+        run: git fetch origin
+
       - name: Checkout the target branch (test-stable)
-        uses: actions/checkout@v4.1.1
-        with:
-          ref: test-stable
-          path: target_branch
+        run: git checkout test-stable
 
       - name: Merge changes from test-main into test-stable
         run: |
-          git fetch origin test-main
-          git checkout test-stable
           git merge origin/test-main --no-edit
 
       - name: Set up Python
@@ -44,17 +42,11 @@ jobs:
         run: |
           VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' pyproject.toml)
           echo "current_version=$VERSION" >> $GITHUB_OUTPUT
-          echo "version : $VERSION"
           MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
-          echo "major minor : $MAJOR_MINOR"
           NEW_VERSION="${MAJOR_MINOR}.${{ steps.date.outputs.date }}"
-          echo "new version : $NEW_VERSION"
           sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           cat pyproject.toml
-
-      - name: Print version for stable
-        run: echo "Updated version for stable:${{steps.update-version-stable.outputs.version }}"
 
       - name: Create main-to-stable PR
         id: test-stable-pr
@@ -95,16 +87,14 @@ jobs:
         with:
           ref: test-stable
 
+      - name: Fetch all branches from origin
+        run: git fetch origin
+
       - name: Checkout the target branch (test-develop)
-        uses: actions/checkout@v4.1.1
-        with:
-          ref: test-develop
-          path: target_branch
+        run: git checkout test-develop
 
       - name: Merge changes from test-stable into test-develop
         run: |
-          git fetch origin test-stable
-          git checkout test-develop
           git merge origin/test-stable --no-edit
 
       - name: Set up Python
@@ -123,9 +113,6 @@ jobs:
           sed -i "s/version = \"${VERSION}\"/version = \"${NEW_VERSION}\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Print version for develop
-        run: echo "Updated version for develop:${{steps.version.outputs.version }}"
-
       - name: Create stable-to-develop PR
         id: test-develop-pr
         uses: peter-evans/create-pull-request@v3
@@ -139,16 +126,3 @@ jobs:
           body: |
             Updated version in pyproject.toml to: ${{ steps.version.outputs.version }}.
             This PR is automatically generated.
-
-      # Uncomment the steps below if you want to automatically merge the PR for the develop branch
-      - name: Merge develop PR
-        uses: actions/github-script@v6.1.0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.pulls.merge({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: parseInt('${{ steps.test-develop-pr.outputs.pull-request-number }}'),
-              merge_method: 'merge',
-            });
