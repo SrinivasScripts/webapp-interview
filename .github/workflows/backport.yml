@@ -53,14 +53,6 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           cat pyproject.toml
 
-      - name: Commit and push changes to pyproject.toml
-        run: |
-          git add pyproject.toml
-          git commit -m "Update version to ${{ steps.update-version-stable.outputs.new_version }}"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:test-stable
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create main-to-stable PR
         id: test-stable-pr
         uses: peter-evans/create-pull-request@v3
@@ -75,7 +67,7 @@ jobs:
             Update version in pyproject.toml to ${{ steps.update-version-stable.outputs.new_version }}.
             This PR is automatically generated.
 
-      - name: Output the created pull request number
+      - name: Check created test-stable PR number
         run: |
           echo "Pull Request Number - ${{ steps.test-stable-pr.outputs.pull-request-number }}"
           echo "Pull Request URL - ${{ steps.test-stable-pr.outputs.pull-request-url }}"
@@ -85,14 +77,10 @@ jobs:
         with:
           github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
           script: |
-            const pull_number = parseInt('${{ steps.test-stable-pr.outputs.pull-request-number }}');
-            if (!pull_number) {
-              core.setFailed('PR number not found');
-            }
             await github.rest.pulls.merge({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: pull_number,
+              pull_number: parseInt('${{ steps.test-stable-pr.outputs.pull-request-number }}'),
               merge_method: 'merge',
             });
 
@@ -135,14 +123,6 @@ jobs:
           NEW_VERSION="${MAJOR_MINOR}.${DATE}-dev"
           sed -i "s/version = \"${VERSION}\"/version = \"${NEW_VERSION}\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Commit and push changes to pyproject.toml
-        run: |
-          git add pyproject.toml
-          git commit -m "Update version to ${{ steps.version.outputs.new_version }} for develop"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:test-develop
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create stable-to-develop PR
         id: test-develop-pr
