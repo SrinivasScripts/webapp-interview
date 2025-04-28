@@ -6,7 +6,6 @@ from medcompass_ds.config.columns_clinical_trials import (
 )
 from medcompass_ds.config.columns_notes import COL_FRANCHISE, COL_PRODUCT
 
-logger = logging.getLogger(__name__)
 
 
 def fetch_clinical_trials_subset(
