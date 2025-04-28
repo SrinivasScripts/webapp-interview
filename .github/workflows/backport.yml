@@ -123,13 +123,21 @@ jobs:
       - name: Update version for develop (test-develop)
         id: version
         run: |
-          VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version *= *"(.)"/\1/')
-          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
-          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
-          DATE=$(date +'%Y%m%d')
-          NEW_VERSION="${MAJOR_MINOR}.${DATE}-dev"
-          sed -i "s/version = \"${VERSION}\"/version = \"${NEW_VERSION}\"/" pyproject.toml
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version *= *"(.)"/\1/')
+            echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+            MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
+            DATE=$(date +'%Y%m%d')
+            NEW_VERSION="${MAJOR_MINOR}.${DATE}-dev"
+
+            # Sanitize branch name: Remove invalid characters like `=` and `"`
+            SANITIZED_BRANCH_NAME="backport-${NEW_VERSION//[[:space:]]/}"  # Removes spaces
+
+            # Update the version in pyproject.toml
+            sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
+            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "sanitized_branch_name=$SANITIZED_BRANCH_NAME" >> $GITHUB_OUTPUT
+
+            cat pyproject.toml
 
       # Create the backport PR with a valid branch name by sanitizing the version
       - name: Create stable-to-develop PR
@@ -138,7 +146,7 @@ jobs:
         with:
           token: ${{ secrets.BOT_ACCESS_TOKEN }}
           commit-message: 'Auto-update version for develop'
-          branch: 'backport-${{ steps.version.outputs.new_version }}'
+          branch: ${{ steps.version.outputs.sanitized_branch_name }}
           title: '[AUTO] Backport stable -> develop'
           branch-suffix: timestamp
           base: test-develop
