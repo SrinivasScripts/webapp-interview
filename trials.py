@@ -24,7 +24,7 @@ def fetch_clinical_trials_subset(
     """Filter the incomin,mauauuannng dataframe for the query names. test2
 
     Apart from fetching records which match the query names, a manual set will always
-    be fetched as well to make sure all the cases are covered. test1
+    be fetched as wetestll to make sure all the cases are covered. test1
 
     Args:
         df: clinical trials dataframe, output of the lake workflow
