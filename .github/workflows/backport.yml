@@ -83,3 +83,68 @@ jobs:
               pull_number: parseInt('${{ steps.test-stable-pr.outputs.pull-request-number }}'),
               merge_method: 'merge',
             });
+  backport-dev-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the base branch (test-stable)
+        uses: actions/checkout@v4.1.1
+        with:
+          ref: test-stable
+
+      - name: Fetch all branches from origin
+        run: git fetch origin
+
+      - name: Checkout the target branch (test-develop)
+        run: git checkout test-develop
+
+      - name: Set up Git user
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Merge changes from test-stable into test-develop with unrelated histories
+        run: |
+          git merge origin/test-stable --no-edit --allow-unrelated-histories --strategy-option=theirs
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Update version for develop
+        id: version
+        run: |
+          VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version *= *"(.)"/\1/')
+          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
+          DATE=$(date +'%Y%m%d')
+          NEW_VERSION="${MAJOR_MINOR}.${DATE}-dev"
+          sed -i "s/version = \"${VERSION}\"/version = \"${NEW_VERSION}\"/" pyproject.toml
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create stable-to-develop PR
+        id: test-develop-pr
+        uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.BOT_ACCESS_TOKEN }}
+          commit-message: 'Auto-update version for develop'
+          branch: 'backport-${{ steps.version.outputs.version }}'
+          title: '[AUTO] Backport stable -> develop'
+          branch-suffix: timestamp
+          base: test-develop
+          body: |
+            Updated version in pyproject.toml to: ${{ steps.version.outputs.version }}.
+            This PR is automatically generated.
+
+      # Uncomment the steps below if you want to automatically merge the PR for the develop branch
+      - name: Merge develop PR
+        uses: actions/github-script@v6.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: parseInt('${{ steps.test-develop-pr.outputs.pull-request-number }}'),
+              merge_method: 'merge',
+            });
