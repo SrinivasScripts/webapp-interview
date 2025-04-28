@@ -1,5 +1,4 @@
 import logging
-import logging
 from collections.abc import Collection
 import pandas as pd
 
