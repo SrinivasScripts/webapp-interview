@@ -20,7 +20,7 @@ def fetch_clinical_trials_subset(
     manual_trials: pd.DataFrame,
     franchise_name: str,
 ) -> pd.DataFrame:
-    """Filjklter thealojpoijp incioijocomin,mauauuannng dataframe for the query names. test3
+    """Filjklter thejhkjhjlalojpoijp incioijocomin,mauauuannng dataframe for the query names. test3
 
     Apart from fetching records which match the query names, a manual set will alwaysss
     be fetched ahellos wetestll toapps make sure all the cases are covered. test1
