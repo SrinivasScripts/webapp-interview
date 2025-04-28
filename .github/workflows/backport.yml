@@ -28,9 +28,9 @@ jobs:
       - name: Checkout the target branch (test-stable)
         run: git checkout test-stable
 
-      - name: Merge changes from test-main into test-stable
+      - name: Merge changes from test-main into test-stable with unrelated histories
         run: |
-          git merge origin/test-main --no-edit
+          git merge origin/test-main --no-edit --allow-unrelated-histories
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -93,9 +93,9 @@ jobs:
       - name: Checkout the target branch (test-develop)
         run: git checkout test-develop
 
-      - name: Merge changes from test-stable into test-develop
+      - name: Merge changes from test-stable into test-develop with unrelated histories
         run: |
-          git merge origin/test-stable --no-edit
+          git merge origin/test-stable --no-edit --allow-unrelated-histories
 
       - name: Set up Python
         uses: actions/setup-python@v5
