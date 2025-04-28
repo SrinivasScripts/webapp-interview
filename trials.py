@@ -5,7 +5,7 @@ from medcompass_ds.config.columns_clinical_trials import (
     COL_PHASE,
 )
 
-
+viswak
 
 def fetch_clinical_trials_subset(
     franchise_name: str,
