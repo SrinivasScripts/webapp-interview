@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 def fetch_clinical_trials_subset(
-    query_names: Collection[str],
     franchise_name: str,
 ) -> pd.DataFrame:
     """Filjklter thejhkjhjlalojpoijp incioijocomin,mauauuannng dataframe for the query names. test3
