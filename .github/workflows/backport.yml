@@ -1,5 +1,4 @@
-name: Backport Full Flow (test-main ➔ test-stable ➔ test-develop)
-
+name: Backport Workflows
 on:
   pull_request:
     branches:
@@ -8,125 +7,270 @@ on:
     types: [closed]
 
 env:
+  AWS_REGION: eu-west-1
+  UV_VERSION: "0.6.10"
   PYTHON_VERSION: "3.11.11"
+  REPOSITORY_NAME: "pypi-all"
 
 jobs:
-  backport-to-test-stable:
+  backport-stable-pr:
     if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-main' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4.1.1
         with:
-          fetch-depth: 0
-
-      - name: Set remote URL to use BOT_ACCESS_TOKEN
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git
-
-      - name: Set Git user
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
+          ref: test-main
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Create backport branch from test-main
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+      - name: Update version for stable
+        id: update-version-stable
         run: |
-          git checkout test-main
-          git pull origin test-main
-          git checkout -b backport-to-test-stable
-
-      - name: Merge latest stable
-        run: |
-          git fetch origin
-          git merge origin/test-stable --no-ff --no-edit || true
-
-      - name: Update version
-        id: version_stable
-        run: |
-          VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version = "([^"]+)"/\1/')
-          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
-          DATE=$(date +'%Y%m%d')
-          NEW_VERSION="${MAJOR_MINOR}.${DATE}"
-          sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
-          git add pyproject.toml
-          git commit -m "Update version to $NEW_VERSION" || echo "No changes to commit"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Push backport branch
-        run: git push origin backport-to-test-stable
-
-      - name: Create PR to test-stable
-        uses: peter-evans/create-pull-request@v5
+         VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' pyproject.toml)
+         echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+         echo "version : $VERSION"
+         MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
+         echo "major minor : $MAJOR_MINOR"
+         NEW_VERSION="${MAJOR_MINOR}.${{ steps.date.outputs.date }}"
+         echo "new version : $NEW_VERSION"
+         sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
+         echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+         cat pyproject.toml
+      - name: Print version for stable
+        run: echo "Updated version for stable:${{steps.update-version-stable.outputs.version }}"
+      - name: Create main-to-stable PR
+        id: test-stable-pr
+        uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.BOT_ACCESS_TOKEN }}
-          branch: backport-to-test-stable
+          commit-message: 'Auto-update version for stable'
+          branch: 'backport-${{ steps.update-version-stable.outputs.version }}-${{ steps.date.outputs.date }}'
+          title: '[AUTO] Backport main -> stable'
+          branch-suffix: timestamp
           base: test-stable
-          title: '[AUTO] Backport full changes test-main -> test-stable'
-          commit-message: '[AUTO] Full backport from test-main to test-stable'
           body: |
-            This PR includes full changes from test-main to test-stable, including version bump.
+            Update version in pyproject.toml to ${{ steps.update-version-stable.outputs.version }}.
+            This PR is automatically generated.
+      - name: Check created test-stable PR number
+        run: |
+          echo "Pull Request Number - ${{ steps.create-pull-request.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.create-pull-request.outputs.pull-request-url }}"
+      - name: Merge stable PR
+        uses: actions/github-script@v6.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: parseInt('${{ steps.test-stable-pr.outputs.pull-request-number }}'),
+              merge_method: 'merge',
+            });
+      - name: Install Node.js dependencies
+        run: npm install @actions/github @actions/core
 
-  backport-to-test-develop:
-    if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-stable' }}
+      - name: Create Pull Request
+        run: |
+          node -e "
+          const github = require('@actions/github');
+          const core = require('@actions/core');
+          
+          // Initialize Octokit with the provided GitHub token
+          const token = process.env.GITHUB_TOKEN;
+          const octokit = github.getOctokit(token);
+          
+          // Function to fetch repository details from GitHub Actions context
+          const getGithubRepositoryInfo = () => {
+            const owner = github.context.repo.owner;
+            const repo = github.context.repo.repo;
+            return { owner, repo };
+          };
+          
+          // Function to create a pull request
+          const createPullRequest = async (data, branchName) => {
+            try {
+              const response = await octokit.rest.pulls.create({
+                owner: data.owner,
+                repo: data.repo,
+                title: 'Automated Pull Request',
+                head: branchName,
+                base: 'test-stable', // Adjust base branch as needed
+                body: 'This is an automated pull request created by the workflow.',
+              });
+              return response.data;
+            } catch (error) {
+              core.setFailed(Error creating pull request: ${error.message});
+              throw error;
+            }
+          };
+          
+          // Function to merge a pull request
+          const mergePullRequest = async (data, pullNumber) => {
+            try {
+              const response = await octokit.rest.pulls.merge({
+                owner: data.owner,
+                repo: data.repo,
+                pull_number: pullNumber,
+                merge_method: 'merge', // Options: 'merge', 'squash', 'rebase'
+              });
+              return response.data;
+            } catch (error) {
+              core.setFailed(Error merging pull request: ${error.message});
+              throw error;
+            }
+          };
+          
+          // Main function
+          const main = async () => {
+            try {
+              const branchName = process.env.GITHUB_REF_NAME;
+              console.log('Current Branch Name:', branchName);
+          
+              const data = getGithubRepositoryInfo();
+          
+              const pr = await createPullRequest(data, branchName);
+              console.log('Pull Request created:', pr.html_url);
+          
+           //   const mergeResult = await mergePullRequest(data, pr.number);
+           //   console.log('Pull Request merged:', mergeResult.sha);
+            } catch (error) {
+              core.setFailed(Error executing script: ${error.message});
+            }
+          };
+          
+          // Run the main function
+          main();
+          "
+        env:
+          GITHUB_TOKEN: ${{ secrets.BOT_ACCESS_TOKEN }}
+
+  backport-dev-pr:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4.1.1
         with:
-          fetch-depth: 0
-
-      - name: Set remote URL to use BOT_ACCESS_TOKEN
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.BOT_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git
-
-      - name: Set Git user
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
+          ref: test-stable
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Create backport branch from test-stable
+      - name: Update version for develop
+        id: version
         run: |
-          git checkout test-stable
-          git pull origin test-stable
-          git checkout -b backport-to-test-develop
-
-      - name: Merge latest develop
-        run: |
-          git fetch origin
-          git merge origin/test-develop --no-ff --no-edit || true
-
-      - name: Update version
-        id: version_develop
-        run: |
-          VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version = "([^"]+)"/\1/')
+          VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version *= *"(.)"/\1/')
+          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
           MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
           DATE=$(date +'%Y%m%d')
           NEW_VERSION="${MAJOR_MINOR}.${DATE}-dev"
-          sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
-          git add pyproject.toml
-          git commit -m "Backport to test-develop: $NEW_VERSION" || echo "No changes to commit"
+          sed -i "s/version = \"${VERSION}\"/version = \"${NEW_VERSION}\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Push backport branch
-        run: git push origin backport-to-test-develop
-
-      - name: Create PR to test-develop
-        uses: peter-evans/create-pull-request@v5
+      - name: Print version for develop
+        run: echo "Updated version for develop:${{steps.version.outputs.version }}"
+      - name: Create stable-to-develop PR
+        id: test-develop-pr
+        uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.BOT_ACCESS_TOKEN }}
-          branch: backport-to-test-develop
+          commit-message: 'Auto-update version for develop'
+          branch: 'backport-${{ steps.version.outputs.version }}'
+          title: '[AUTO] Backport stable -> develop'
+          branch-suffix: timestamp
           base: test-develop
-          title: '[AUTO] Backport full changes test-stable -> test-develop'
-          commit-message: '[AUTO] Full backport from test-stable to test-develop'
           body: |
-            This PR includes full changes from test-stable to test-develop, including version bump.
+            Updated version in pyproject.toml to: ${{ steps.version.outputs.version }}
+            This PR is automatically generated.
+      # - name: Merge develop PR
+      #   uses: actions/github-script@v6.1.0
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     script: |
+      #       await github.rest.pulls.merge({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         pull_number: parseInt('${{ steps.test-develop-pr.outputs.pull-request-number }}'),
+      #         merge_method: 'merge',
+      #       });
+      
+      # - name: Install Node.js dependencies
+      #   run: npm install @actions/github @actions/core
+
+      # - name: Create Pull Request
+      #   run: |
+      #     node -e "
+      #     const github = require('@actions/github');
+      #     const core = require('@actions/core');
+          
+      #     // Initialize Octokit with the provided GitHub token
+      #     const token = process.env.GITHUB_TOKEN;
+      #     const octokit = github.getOctokit(token);
+          
+      #     // Function to fetch repository details from GitHub Actions context
+      #     const getGithubRepositoryInfo = () => {
+      #       const owner = github.context.repo.owner;
+      #       const repo = github.context.repo.repo;
+      #       return { owner, repo };
+      #     };
+          
+      #     // Function to create a pull request
+      #     const createPullRequest = async (data, branchName) => {
+      #       try {
+      #         const response = await octokit.rest.pulls.create({
+      #           owner: data.owner,
+      #           repo: data.repo,
+      #           title: 'Automated Pull Request',
+      #           head: branchName,
+      #           base: 'develop', // Adjust base branch as needed
+      #           body: 'This is an automated pull request created by the workflow.',
+      #         });
+      #         return response.data;
+      #       } catch (error) {
+      #         core.setFailed(Error creating pull request: ${error.message});
+      #         throw error;
+      #       }
+      #     };
+          
+      #     // Function to merge a pull request
+      #     const mergePullRequest = async (data, pullNumber) => {
+      #       try {
+      #         const response = await octokit.rest.pulls.merge({
+      #           owner: data.owner,
+      #           repo: data.repo,
+      #           pull_number: pullNumber,
+      #           merge_method: 'merge', // Options: 'merge', 'squash', 'rebase'
+      #         });
+      #         return response.data;
+      #       } catch (error) {
+      #         core.setFailed(Error merging pull request: ${error.message});
+      #         throw error;
+      #       }
+      #     };
+          
+      #     // Main function
+      #     const main = async () => {
+      #       try {
+      #         const branchName = process.env.GITHUB_REF_NAME;
+      #         console.log('Current Branch Name:', branchName);
+          
+      #         const data = getGithubRepositoryInfo();
+          
+      #         const pr = await createPullRequest(data, branchName);
+      #         console.log('Pull Request created:', pr.html_url);
+          
+      #      //   const mergeResult = await mergePullRequest(data, pr.number);
+      #      //   console.log('Pull Request merged:', mergeResult.sha);
+      #       } catch (error) {
+      #         core.setFailed(Error executing script: ${error.message});
+      #       }
+      #     };
+          
+      #     // Run the main function
+      #     main();
+      #     "
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.BOT_ACCESS_TOKEN }}
