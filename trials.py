@@ -4,7 +4,6 @@ from collections.abc import Collection
 from medcompass_ds.config.columns_clinical_trials import (
     COL_NCT_ID,
     COL_PHASE,
-    COL_START_DATE,
 )
 from medcompass_ds.config.columns_notes import COL_FRANCHISE, COL_PRODUCT
 
