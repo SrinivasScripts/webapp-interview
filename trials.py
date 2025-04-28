@@ -1,5 +1,4 @@
 import logging
-from collections.abc import Collection
 
 from medcompass_ds.config.columns_clinical_trials import (
     COL_NCT_ID,
