@@ -21,6 +21,9 @@ jobs:
         uses: actions/checkout@v4.1.1
         with:
           ref: test-main
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
 
       - name: Fetch all branches from origin
         run: git fetch origin
@@ -53,7 +56,7 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           cat pyproject.toml
 
-      # No need to push the changes directly, just create a PR
+      # Create the pull request with a valid branch name by sanitizing the version
       - name: Create main-to-stable PR
         id: test-stable-pr
         uses: peter-evans/create-pull-request@v3
@@ -93,6 +96,9 @@ jobs:
         uses: actions/checkout@v4.1.1
         with:
           ref: test-stable
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
 
       - name: Fetch all branches from origin
         run: git fetch origin
@@ -125,7 +131,7 @@ jobs:
           sed -i "s/version = \"${VERSION}\"/version = \"${NEW_VERSION}\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      # Create a backport PR from stable to develop, no need to push manually
+      # Create the backport PR with a valid branch name by sanitizing the version
       - name: Create stable-to-develop PR
         id: test-develop-pr
         uses: peter-evans/create-pull-request@v3
