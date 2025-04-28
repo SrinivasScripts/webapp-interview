@@ -1,6 +1,6 @@
 [project]
 name = "medcompass-ds"
-version = "25.1.0.20250428-dev"
+version = "25.2.0.20250428-dev"
 description = "Data Science repository for MedCompass"
 authors = [{ name = "OKRA Technologies Ltd", email = "info@okra.ai" }]
 requires-python = ">=3.11,<3.12"
