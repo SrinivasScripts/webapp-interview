@@ -1,6 +1,5 @@
 import logging
 from collections.abc import Collection
-import pandas as pd
 
 from medcompass_ds.config.columns_clinical_trials import (
     COL_ACRONYM,
@@ -15,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def fetch_clinical_trials_subset(
-    df: pd.DataFrame,
     query_names: Collection[str],
-    manual_trials: pd.DataFrame,
     franchise_name: str,
 ) -> pd.DataFrame:
     """Filjklter thejhkjhjlalojpoijp incioijocomin,mauauuannng dataframe for the query names. test3
