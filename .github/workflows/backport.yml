@@ -87,7 +87,6 @@ jobs:
               pull_number: parseInt('${{ steps.test-stable-pr.outputs.pull-request-number }}'),
               merge_method: 'merge',
             });
-
   backport-dev-pr:
     needs: backport-stable-pr  # Ensure backport-dev-pr runs after backport-stable-pr succeeds
     runs-on: ubuntu-latest
@@ -96,9 +95,6 @@ jobs:
         uses: actions/checkout@v4.1.1
         with:
           ref: test-stable
-      - name: Get current date
-        id: date
-        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
 
       - name: Fetch all branches from origin
         run: git fetch origin
@@ -123,23 +119,22 @@ jobs:
       - name: Update version for develop (test-develop)
         id: version
         run: |
-            VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version *= *"(.)"/\1/')
-            echo "current_version=$VERSION" >> $GITHUB_OUTPUT
-            MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
-            DATE=$(date +'%Y%m%d')
-            NEW_VERSION="${MAJOR_MINOR}.${DATE}-dev"
+          VERSION=$(grep -E '^version = *"' pyproject.toml | head -n1 | sed -E 's/version *= *"(.)"/\1/')
+          echo "current_version=$VERSION" >> $GITHUB_OUTPUT
+          MAJOR_MINOR=$(echo $VERSION | cut -d. -f1-3)
+          DATE=$(date +'%Y%m%d')
+          NEW_VERSION="${MAJOR_MINOR}.${DATE}-dev"
 
-            # Sanitize branch name: Remove invalid characters like `=` and `"`
-            SANITIZED_BRANCH_NAME="backport-${NEW_VERSION//[[:space:]]/}"  # Removes spaces
+          # Sanitize branch name: Remove invalid characters like `=`, `"`, and spaces
+          SANITIZED_BRANCH_NAME="backport-${NEW_VERSION//[[:space:]]/}"  # Remove spaces
+          SANITIZED_BRANCH_NAME="${SANITIZED_BRANCH_NAME//\"/}"  # Remove quotes
+          SANITIZED_BRANCH_NAME="${SANITIZED_BRANCH_NAME//=/-}"  # Replace equals sign with a hyphen
 
-            # Update the version in pyproject.toml
-            sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
-            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-            echo "sanitized_branch_name=$SANITIZED_BRANCH_NAME" >> $GITHUB_OUTPUT
+          sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "sanitized_branch_name=$SANITIZED_BRANCH_NAME" >> $GITHUB_OUTPUT
+          cat pyproject.toml
 
-            cat pyproject.toml
-
-      # Create the backport PR with a valid branch name by sanitizing the version
       - name: Create stable-to-develop PR
         id: test-develop-pr
         uses: peter-evans/create-pull-request@v3
@@ -158,7 +153,7 @@ jobs:
       - name: Merge develop PR
         uses: actions/github-script@v6.1.0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
           script: |
             const pull_number = parseInt('${{ steps.test-develop-pr.outputs.pull-request-number }}');
             if (!pull_number) {
