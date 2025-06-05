@@ -1,166 +1,183 @@
 name: Backport Workflows
-
 on:
   pull_request:
-    branches: [test-main, test-stable]
+    branches:
+      - test-main
+      - test-stable
     types: [closed]
+
+env:
+  AWS_REGION: eu-west-1
+  AWS_ROLE: arn:aws:iam::998607346652:role/github_openid
+  UV_VERSION: "0.6.10"
+  PYTHON_VERSION: "3.11.11"
+  AWS_CODEARTIFACT_ACCOUNT: "998607346652"
+  DOMAIN: "okra"
+  REPOSITORY_NAME: "pypi-all"
 
 jobs:
   backport-stable-pr:
     if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-main' }}
     runs-on: ubuntu-latest
-    outputs:
-      pr-number: ${{ steps.create-pr.outputs.pull-request-number }}
     steps:
-      - name: Checkout test-main
-        uses: actions/checkout@v4
+      - name: Checkout the base branch (test-main)
+        uses: actions/checkout@v4.1.1
         with:
           ref: test-main
           fetch-depth: 0
 
-      - name: Set up Git
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: Set up Git user
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      - name: Create test-stable from test-main
+      - name: Checkout the target branch (test-stable)
         run: |
           git fetch origin
+          git checkout test-main
           git checkout -b test-stable origin/test-stable
+
+      - name: Merge changes from test-main into test-stable
+        run: |
           git merge origin/test-main --no-edit
 
-      - name: Update version
-        id: version
-        run: |
-          VERSION=$(grep '^version =' pyproject.toml | cut -d '"' -f2)
-          NEW_VERSION="${VERSION%.*}.$(date +'%Y%m%d')"
-          sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" pyproject.toml
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Create PR test-main → test-stable
-        id: create-pr
+      - name: Update version for stable (test-stable)
+        id: update-version-stable
+        run: |
+          VERSION=$(grep 'version =' pyproject.toml | cut -d '"' -f2)
+          YEAR_MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-3)
+          DATE=$(date +'%Y%m%d')
+          NEW_VERSION="${YEAR_MAJOR_MINOR}.${DATE}"
+          sed -i "s|version = \"$VERSION\"|version = \"$NEW_VERSION\"|" pyproject.toml
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          cat pyproject.toml
+
+      - name: Create main-to-stable PR
+        id: test-stable-pr
         uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.BOT_ACCESS_TOKEN }}
-          commit-message: "chore: backport to stable"
-          branch: "backport-stable-${{ steps.version.outputs.new_version }}"
-          title: "[AUTO] Backport main → stable v${{ steps.version.outputs.new_version }}"
+          commit-message: "Auto-update version for stable"
+          branch: "backport-${{ steps.update-version-stable.outputs.new_version }}"
+          title: "[AUTO] Backport main -> stable"
+          branch-suffix: timestamp
           base: test-stable
           body: |
-            🤖 Automated backport from `test-main` to `test-stable`.
+            Update version in pyproject.toml to ${{ steps.update-version-stable.outputs.new_version }}.
+            This PR is automatically generated.
 
-            Version bumped to `${{ steps.version.outputs.new_version }}`.
-          labels: |
-            auto-backport
-            stable
-
-      - name: Approve PR using second bot
-        if: steps.create-pr.outputs.pull-request-number
-        uses: actions/github-script@v6
+      - name: First approval for stable PR
+        uses: hmarr/auto-approve-action@v3
         with:
-          github-token:  ${{ secrets.APPROVER_BOT_TOKEN}}
-          script: |
-            const prNumber = parseInt('${{ steps.create-pr.outputs.pull-request-number }}');
-            await github.rest.pulls.createReview({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
-              event: 'APPROVE',
-              body: '✅ Auto-approved by secondary bot'
-            });
+          github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
 
-      - name: Merge PR if approved
-        if: steps.create-pr.outputs.pull-request-number
-        uses: actions/github-script@v6
+      - name: Second approval for stable PR
+        uses: hmarr/auto-approve-action@v3
+        with:
+          github-token: ${{ secrets.APPROVER_BOT_TOKEN }}
+
+      - name: Merge stable PR
+        uses: actions/github-script@v6.1.0
         with:
           github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
           script: |
-            const prNumber = parseInt('${{ steps.create-pr.outputs.pull-request-number }}');
-            let approvals = await github.rest.pulls.listReviews({
+            const pull_number = parseInt('${{ steps.test-stable-pr.outputs.pull-request-number }}');
+            if (!pull_number) {
+              core.setFailed('PR number not found');
+            }
+            await github.rest.pulls.merge({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: prNumber
+              pull_number: pull_number,
+              merge_method: 'merge',
             });
 
-            const approved = approvals.data.filter(r => r.state === 'APPROVED');
-            if (approved.length < 2) {
-              core.setFailed(`❌ Only ${approved.length} approvals - cannot auto-merge`);
-            } else {
-              await github.rest.pulls.merge({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: prNumber,
-                merge_method: 'merge',
-                commit_title: 'chore: auto-merge stable backport'
-              });
-              console.log('✅ PR auto-merged');
-            }
-
   backport-dev-pr:
-    needs: backport-stable-pr
-    if: ${{ needs.backport-stable-pr.outputs.pr-number != '' }}
+    if: ${{ github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-stable' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout test-stable
-        uses: actions/checkout@v4
+      - name: Checkout the base branch (test-stable)
+        uses: actions/checkout@v4.1.1
         with:
           ref: test-stable
           fetch-depth: 0
 
-      - name: Set up Git
+      - name: Set up Git user
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      - name: Merge test-stable → test-develop
+      - name: Checkout the target branch (test-develop)
         run: |
           git fetch origin
+          git checkout test-stable
           git checkout -b test-develop origin/test-develop
+
+      - name: Merge changes from test-stable into test-develop
+        run: |
           git merge origin/test-stable --no-edit
 
-      - name: Update develop version
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Update version for develop (test-develop)
         id: version
         run: |
-          VERSION=$(grep '^version =' pyproject.toml | cut -d '"' -f2)
-          NEW_VERSION="${VERSION%.*}.$(date +'%Y%m%d')-dev"
-          sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" pyproject.toml
+          VERSION=$(grep 'version =' pyproject.toml | cut -d '"' -f2)
+          YEAR_MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-3)
+          DATE=$(date +'%Y%m%d')
+          NEW_VERSION="${YEAR_MAJOR_MINOR}.${DATE}-dev"
+          sed -i "s|version = \"$VERSION\"|version = \"$NEW_VERSION\"|" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          cat pyproject.toml
 
-      - name: Create PR test-stable → test-develop
-        id: create-pr
+      - name: Create stable-to-develop PR
+        id: test-develop-pr
         uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.BOT_ACCESS_TOKEN }}
-          commit-message: "chore: backport to develop"
-          branch: "backport-develop-${{ steps.version.outputs.new_version }}"
-          title: "[AUTO] Backport stable → develop v${{ steps.version.outputs.new_version }}"
+          commit-message: "Auto-update version for develop"
+          branch: "backport-${{ steps.version.outputs.new_version }}"
+          title: "[AUTO] Backport stable -> develop"
+          branch-suffix: timestamp
           base: test-develop
           body: |
-            🤖 Automated backport from `test-stable` to `test-develop`.
+            Updated version in pyproject.toml to: ${{ steps.version.outputs.new_version }}.
+            This PR is automatically generated.
 
-            Version bumped to `${{ steps.version.outputs.new_version }}`.
-
-      - name: Auto-approve and merge develop PR
-        if: steps.create-pr.outputs.pull-request-number
-        uses: actions/github-script@v6
+      - name: First approval for develop PR
+        uses: hmarr/auto-approve-action@v3
         with:
-          github-token: ${{ secrets.APPROVER_BOT_TOKEN  }}
+          github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
+
+      - name: Second approval for develop PR
+        uses: hmarr/auto-approve-action@v3
+        with:
+          github-token: ${{ secrets.APPROVER_BOT_TOKEN }}
+
+      - name: Merge develop PR
+        uses: actions/github-script@v6.1.0
+        with:
+          github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
           script: |
-            const prNumber = parseInt('${{ steps.create-pr.outputs.pull-request-number }}');
-            await github.rest.pulls.createReview({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
-              event: 'APPROVE',
-              body: '✅ Auto-approved backport to develop'
-            });
-
-            await new Promise(resolve => setTimeout(resolve, 3000)); // wait for approval to register
-
+            const pull_number = parseInt('${{ steps.test-develop-pr.outputs.pull-request-number }}');
+            if (!pull_number) {
+              core.setFailed('PR number not found');
+            }
             await github.rest.pulls.merge({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: prNumber,
+              pull_number: pull_number,
               merge_method: 'merge',
-              commit_title: 'chore: auto-merge develop backport'
             });
