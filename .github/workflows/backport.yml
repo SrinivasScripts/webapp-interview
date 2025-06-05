@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pr-number: ${{ steps.create-pr.outputs.pull-request-number }}
+      pr-url: ${{ steps.create-pr.outputs.pull-request-url }}
       new-version: ${{ steps.version.outputs.new_version }}
     steps:
       - uses: actions/checkout@v4.1.1
@@ -60,106 +61,139 @@ jobs:
           labels: |
             auto-backport
             stable-release
-            needs-2-approvals
+            auto-approved
           body: |
             ## 🤖 Automated Backport
             
             **Version:** `${{ steps.version.outputs.new_version }}`
             **Source:** `test-main` → `test-stable`
             
-            ### ⚠️ Review Required
-            This PR requires **2 approvals** before auto-merge.
+            ### ✅ Auto-Approved
+            This PR is automatically approved and will be merged by the workflow.
             
             ### 📋 Changes
             - Updated version in pyproject.toml
             - Backported latest changes from main branch
             
-            *Will auto-merge once 2 approvals are received.*
+            *This is an automated backport that will proceed automatically.*
 
-      - name: Notify reviewers
+      - name: Auto-approve PR
         if: steps.create-pr.outputs.pull-request-number
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
           script: |
-            await github.rest.issues.createComment({
+            const prNumber = ${{ steps.create-pr.outputs.pull-request-number }};
+            
+            console.log(`🔄 Auto-approving PR #${prNumber}`);
+            
+            // First approval
+            await github.rest.pulls.createReview({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ steps.create-pr.outputs.pull-request-number }},
-              body: '📋 **Status:** Awaiting 2 approvals for auto-merge\n🔄 **Next:** Will merge automatically once approved'
-            });
-
-  auto-merge-stable:
-    if: |
-      github.event_name == 'pull_request_review' &&
-      github.event.review.state == 'approved' &&
-      github.event.pull_request.base.ref == 'test-stable' &&
-      startsWith(github.event.pull_request.title, '[AUTO] Backport main → stable')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Process approval and merge
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
-          script: |
-            const prNumber = context.payload.pull_request.number;
-            
-            // Get unique approvals
-            const { data: reviews } = await github.rest.pulls.listReviews({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber
+              pull_number: prNumber,
+              event: 'APPROVE',
+              body: '✅ Auto-approved by backport workflow - automated stable release'
             });
             
-            const approvers = [...new Set(
-              reviews
-                .filter(r => r.state === 'APPROVED' && r.user.type !== 'Bot')
-                .map(r => r.user.login)
-            )];
+            console.log('✅ PR auto-approved');
             
-            const approvalCount = approvers.length;
-            console.log(`Approvals: ${approvalCount}/2 from [${approvers.join(', ')}]`);
-            
-            const statusComment = approvalCount >= 2 
-              ? `🎉 **Auto-merging!** Received ${approvalCount} approvals from: ${approvers.join(', ')}`
-              : `⏳ **Status:** ${approvalCount}/2 approvals received${approvers.length ? ` from: ${approvers.join(', ')}` : ''}`;
-            
+            // Add status comment
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
-              body: statusComment
+              body: '📋 **Backport Workflow Status**\n\n' +
+                    '✅ Step 1: Stable PR created and auto-approved\n' +
+                    '🔄 Step 2: Proceeding to auto-merge\n' +
+                    '⏳ Step 3: Will continue to develop backport\n\n' +
+                    '**Status:** Automated approval completed.'
             });
+
+  auto-merge-stable:
+    needs: backport-stable-pr
+    if: always() && needs.backport-stable-pr.result == 'success' && needs.backport-stable-pr.outputs.pr-number
+    runs-on: ubuntu-latest
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
+    steps:
+      - name: Auto-merge stable PR
+        id: merge
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
+          script: |
+            const prNumber = ${{ needs.backport-stable-pr.outputs.pr-number }};
+            let merged = false;
             
-            if (approvalCount >= 2) {
+            console.log(`🔄 Auto-merging PR #${prNumber}...`);
+            
+            try {
+              // Check if PR is still open and mergeable
               const { data: pr } = await github.rest.pulls.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: prNumber
               });
               
-              if (pr.state === 'open' && pr.mergeable) {
+              if (pr.state === 'closed') {
+                if (pr.merged) {
+                  console.log('✅ PR already merged');
+                  merged = true;
+                } else {
+                  console.log('❌ PR was closed without merging');
+                  core.setFailed('PR was closed without merging');
+                  return;
+                }
+              } else {
+                // Wait a moment for approval to register
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                
+                // Merge the PR
                 await github.rest.pulls.merge({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   pull_number: prNumber,
                   merge_method: 'merge',
-                  commit_title: `${pr.title.replace('[AUTO] ', '')}`,
-                  commit_message: `Auto-merged after ${approvalCount} approvals: ${approvers.join(', ')}`
+                  commit_title: `Backport main → stable v${{ needs.backport-stable-pr.outputs.new-version }}`,
+                  commit_message: `Auto-merged backport from main to stable - automated workflow`
                 });
-                console.log('✅ Auto-merged successfully');
-              } else {
+                
+                console.log('✅ PR merged successfully');
+                merged = true;
+                
+                // Add success comment
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: prNumber,
-                  body: `❌ **Cannot merge:** PR state: ${pr.state}, mergeable: ${pr.mergeable}`
+                  body: '🎉 **Auto-merged successfully!** Proceeding to develop backport...'
                 });
               }
+            } catch (error) {
+              console.error(`❌ Error merging PR: ${error.message}`);
+              
+              // Try to add error comment
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: `❌ **Auto-merge failed:** ${error.message}\n\nPlease merge manually to continue the workflow.`
+                });
+              } catch (commentError) {
+                console.error('Could not add error comment');
+              }
+              
+              core.setFailed(`Failed to merge PR: ${error.message}`);
+              return;
             }
+            
+            core.setOutput('merged', merged);
 
   backport-dev-pr:
-    if: github.event.pull_request.merged && github.event.pull_request.base.ref == 'test-stable'
+    needs: [backport-stable-pr, auto-merge-stable]
+    if: always() && needs.auto-merge-stable.outputs.merged == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.1.1
@@ -185,6 +219,7 @@ jobs:
           NEW_VERSION="${VERSION%.*}.$(date +'%Y%m%d')-dev"
           sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Updated develop version: $NEW_VERSION"
 
       - name: Create and merge develop PR
         uses: peter-evans/create-pull-request@v3
@@ -200,9 +235,10 @@ jobs:
             **Version:** `${{ steps.version.outputs.new_version }}`
             **Source:** `test-stable` → `test-develop`
             
+            This is the final step of the automated backport workflow.
             Auto-merging develop backport.
 
-      - name: Auto-approve and merge
+      - name: Auto-approve and merge develop PR
         if: steps.dev-pr.outputs.pull-request-number
         uses: actions/github-script@v6
         with:
@@ -210,17 +246,19 @@ jobs:
           script: |
             const prNumber = ${{ steps.dev-pr.outputs.pull-request-number }};
             
+            console.log(`🔄 Auto-approving and merging develop PR #${prNumber}`);
+            
             // Approve PR
             await github.rest.pulls.createReview({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
               event: 'APPROVE',
-              body: 'Auto-approved develop backport'
+              body: 'Auto-approved develop backport - final step of backport workflow'
             });
             
             // Wait briefly for approval to register
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Merge PR
             await github.rest.pulls.merge({
@@ -229,7 +267,22 @@ jobs:
               pull_number: prNumber,
               merge_method: 'merge',
               commit_title: 'chore: backport stable → develop',
-              commit_message: 'Automated backport from stable to develop branch'
+              commit_message: 'Automated backport from stable to develop branch - workflow completed'
             });
             
-            console.log('✅ Develop PR auto-merged');
+            console.log('✅ Develop PR auto-merged - Backport workflow completed!');
+            
+            // Add completion comment to original stable PR
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: ${{ needs.backport-stable-pr.outputs.pr-number }},
+                body: '🎉 **Backport Workflow Completed!**\n\n' +
+                      '✅ Step 1: Stable PR auto-approved and merged\n' +
+                      '✅ Step 2: Develop backport completed\n' +
+                      '🚀 All branches updated successfully!'
+              });
+            } catch (error) {
+              console.log('Note: Could not update original PR (likely already closed)');
+            }
