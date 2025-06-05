@@ -1,5 +1,5 @@
 import logging
-
+import python
 from medcompass_ds.config.columns_clinical_trials import (
     COL_NCT_ID,
     COL_PHASE,
