@@ -58,7 +58,7 @@ jobs:
         if: steps.create-pr.outputs.pull-request-number
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.APPROVER_BOT_TOKEN }}
+          github-token:  ${{ secrets.BOT_ACCESS_TOKEN }}
           script: |
             const prNumber = parseInt('${{ steps.create-pr.outputs.pull-request-number }}');
             await github.rest.pulls.createReview({
