@@ -3,5 +3,3 @@ testing full
 kjljnlkhjoiu
 lj;ij;oifs
 kjknkljnlkj
-j
-viswak
