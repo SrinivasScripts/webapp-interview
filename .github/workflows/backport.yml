@@ -76,7 +76,7 @@ jobs:
       - name: First approval for stable PR
         uses: hmarr/auto-approve-action@v3
         with:
-          github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
+          github-token: ${{ secrets.APPROVER_BOT_TOKEN_1 }}
 
       - name: Second approval for stable PR
         uses: hmarr/auto-approve-action@v3
@@ -155,7 +155,7 @@ jobs:
       - name: First approval for develop PR
         uses: hmarr/auto-approve-action@v3
         with:
-          github-token: ${{ secrets.BOT_ACCESS_TOKEN }}
+          github-token: ${{ secrets.APPROVER_BOT_TOKEN_1 }}
 
       - name: Second approval for develop PR
         uses: hmarr/auto-approve-action@v3
