@@ -50,16 +50,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Update version for stable (test-stable)
-        id: update-version-stable
+      - name: Update version
+        id: version
         run: |
-          VERSION=$(grep 'version =' pyproject.toml | cut -d '"' -f2)
-          YEAR_MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-3)
-          DATE=$(date +'%Y%m%d')
-          NEW_VERSION="${YEAR_MAJOR_MINOR}.${DATE}"
-          sed -i "s|version = \"$VERSION\"|version = \"$NEW_VERSION\"|" pyproject.toml
+          VERSION=$(grep '^version =' pyproject.toml | cut -d '"' -f2)
+          NEW_VERSION="${VERSION%.*}.$(date +'%Y%m%d')"
+          sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          cat pyproject.toml
+          echo "Updated version: $VERSION → $NEW_VERSION"
 
       - name: Create main-to-stable PR
         id: test-stable-pr
@@ -131,16 +129,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Update version for develop (test-develop)
+      - name: Update version
         id: version
         run: |
-          VERSION=$(grep 'version =' pyproject.toml | cut -d '"' -f2)
-          YEAR_MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-3)
-          DATE=$(date +'%Y%m%d')
-          NEW_VERSION="${YEAR_MAJOR_MINOR}.${DATE}-dev"
-          sed -i "s|version = \"$VERSION\"|version = \"$NEW_VERSION\"|" pyproject.toml
+          VERSION=$(grep '^version =' pyproject.toml | cut -d '"' -f2)
+          NEW_VERSION="${VERSION%.*}.$(date +'%Y%m%d')"
+          sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" pyproject.toml
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          cat pyproject.toml
+          echo "Updated version: $VERSION → $NEW_VERSION"
 
       - name: Create stable-to-develop PR
         id: test-develop-pr
