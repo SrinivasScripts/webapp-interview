@@ -7,5 +7,3 @@ j
 asr
 viswak
 sriram
-rama
-vi
